@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../data/app_state.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/validators.dart';
@@ -11,6 +12,7 @@ import '../widgets/app_text_field.dart';
 import '../widgets/app_top_bar.dart';
 import '../widgets/primary_button.dart';
 import 'main_shell.dart';
+import 'sign_in_screen.dart';
 
 /// Who the user wants to be in the app.
 /// (We will move this to a models file later.)
@@ -37,6 +39,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   bool _agreed = false;
   bool _showPhotoError = false;
   bool _showTermsError = false;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -92,7 +95,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     );
   }
 
-  void _submit() {
+  void _toast(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _submit() async {
     final formOk = _formKey.currentState!.validate();
     setState(() {
       _showPhotoError = _photo == null;
@@ -100,11 +109,36 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     });
     if (!formOk || _photo == null || !_agreed) return;
 
-    // TODO: save the new account (next steps).
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainShell()),
+    setState(() => _loading = true);
+    try {
+      // Creates the login, the profile row and an empty wallet
+      // (see handle_new_user in supabase/schema.sql), then uploads the photo.
+      final signedIn = await AppState.instance.signUp(
+        fullName: _nameController.text,
+        email: _emailController.text,
+        password: _passwordController.text,
+        role: _role == UserRole.freelancer ? 'freelancer' : 'client',
+        photo: _photo,
+      );
+      if (!mounted) return;
+
+      if (signedIn) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainShell()),
           (route) => false,
-    );
+        );
+      } else {
+        // Supabase "Confirm email" is turned on.
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const SignInScreen()),
+        );
+        _toast('Account created. Check your email to confirm, then sign in.');
+      }
+    } on AppException catch (e) {
+      _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -173,9 +207,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       _buildTermsRow(),
                       const SizedBox(height: 16),
                       PrimaryButton(
-                        label: 'Create account',
+                        label: _loading ? 'Creating account…' : 'Create account',
                         icon: Icons.person_add_alt_1_outlined,
-                        onPressed: _submit,
+                        onPressed: _loading ? null : _submit,
                       ),
                       const SizedBox(height: 16),
                       Center(

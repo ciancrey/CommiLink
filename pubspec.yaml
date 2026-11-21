@@ -12,8 +12,11 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  google_fonts: ^6.3.0
+  google_fonts: ^6.3.2   # 6.3.0 fails to compile on newer Flutter
   image_picker: ^1.1.2
+  supabase_flutter: ^2.8.0   # backend: login, database, storage
+  file_picker: ^10.0.0       # attach files (chat, delivery, reference files)
+  url_launcher: ^6.3.0       # open attached files
 
 dev_dependencies:
   flutter_test:

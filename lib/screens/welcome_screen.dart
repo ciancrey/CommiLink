@@ -341,10 +341,14 @@ class WelcomeScreen extends StatelessWidget {
             if (i < 4) const SizedBox(width: 4),
           ],
           const SizedBox(width: 10),
-          Text(
-            'Work confirmed',
-            style: AppText.small12Medium.copyWith(
-              color: AppColors.textPrimary,
+          Flexible(
+            child: Text(
+              'Work confirmed',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.small12Medium.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
         ],

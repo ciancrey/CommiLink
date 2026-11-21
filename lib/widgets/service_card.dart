@@ -59,7 +59,9 @@ class ServiceCard extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                service.rating.toStringAsFixed(1),
+                service.reviewCount == 0
+                    ? 'New'
+                    : service.rating.toStringAsFixed(1),
                 style: AppText.small12Medium.copyWith(
                   color: AppColors.textPrimary,
                 ),

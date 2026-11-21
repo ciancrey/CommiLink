@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../models/service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
@@ -16,7 +17,12 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
-  static const List<String> _filters = ['All', 'Active', 'Completed'];
+  static const List<String> _filters = [
+    'All',
+    'Active',
+    'Completed',
+    'Disputed',
+  ];
 
   final _state = AppState.instance;
   String _filter = 'All';
@@ -27,6 +33,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return all.where((o) => o.isActive).toList();
       case 'Completed':
         return all.where((o) => o.status == 'Completed').toList();
+      case 'Disputed':
+        return all
+            .where((o) => o.status == 'Disputed' || o.disputeNumber != null)
+            .toList();
       default:
         return all;
     }
@@ -40,8 +50,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
         valueListenable: _state.orders,
         builder: (context, orders, _) {
           final visible = _visible(orders);
+          final me = _state.profile.value;
 
-          return SingleChildScrollView(
+          return RefreshIndicator(
+            color: AppColors.wine700,
+            onRefresh: () async {
+              try {
+                await _state.refresh();
+              } on AppException catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(e.message)));
+              }
+            },
+            child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,7 +72,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 Text('Orders', style: AppText.heading24),
                 const SizedBox(height: 2),
                 Text(
-                  'Track every commission you\u2019ve placed',
+                  me?.isAdmin == true
+                      ? 'All commissions · resolve disputes here'
+                      : me?.isFreelancer == true
+                          ? 'Requests from your clients'
+                          : 'Track every commission you\u2019ve placed',
                   style: AppText.small12,
                 ),
                 const SizedBox(height: 16),
@@ -75,6 +102,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   for (final order in visible) ...[
                     _OrderCard(
                       order: order,
+                      viewerId: me?.id,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => OrderDetailScreen(orderId: order.id),
@@ -85,6 +113,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ],
               ],
             ),
+          ),
           );
         },
       ),
@@ -114,7 +143,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 4),
           Text(
             noOrdersAtAll
-                ? 'Request a service from Home and it will show up here.'
+                ? (_state.profile.value?.isFreelancer == true
+                    ? 'When a client requests one of your services it will show up here.'
+                    : 'Request a service from Home and it will show up here.')
                 : 'No orders match this filter.',
             textAlign: TextAlign.center,
             style: AppText.small12,
@@ -166,14 +197,23 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.onTap});
+  const _OrderCard({
+    required this.order,
+    required this.onTap,
+    this.viewerId,
+  });
 
   final Order order;
+  final String? viewerId;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final service = order.service;
+    // Freelancers see the client's name; clients see the freelancer's.
+    final otherName = viewerId == order.freelancerId
+        ? order.clientName
+        : service.freelancerName;
 
     return Material(
       color: AppColors.surface,
@@ -220,7 +260,7 @@ class _OrderCard extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     child: Text(
-                      service.initials,
+                      initialsOf(otherName),
                       style: AppText.caption11.copyWith(
                         color: AppColors.textOnBrand,
                         fontSize: 9,
@@ -230,7 +270,7 @@ class _OrderCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${service.freelancerName} · ${shortDate(order.createdAt)} · '
+                      '$otherName · ${shortDate(order.createdAt)} · '
                           '${service.deliveryDays} days',
                       style: AppText.small12,
                       overflow: TextOverflow.ellipsis,

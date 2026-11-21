@@ -5,10 +5,18 @@ import '../theme/app_theme.dart';
 
 /// Top bar with a round back button and a centered title.
 class AppTopBar extends StatelessWidget {
-  const AppTopBar({super.key, required this.title, this.onBack});
+  const AppTopBar({
+    super.key,
+    required this.title,
+    this.onBack,
+    this.trailing,
+  });
 
   final String title;
   final VoidCallback? onBack;
+
+  /// Optional round button on the right (e.g. chat icon on a commission).
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +52,7 @@ class AppTopBar extends StatelessWidget {
                 style: AppText.title16,
               ),
             ),
-            const SizedBox(width: 44),
+            trailing ?? const SizedBox(width: 44),
           ],
         ),
       ),

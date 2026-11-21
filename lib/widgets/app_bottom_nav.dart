@@ -9,10 +9,16 @@ class AppBottomNav extends StatelessWidget {
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.messagesDot = false,
+    this.alertsDot = false,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
+
+  /// Peach dot when there are unread chat messages / alerts.
+  final bool messagesDot;
+  final bool alertsDot;
 
   static const List<_NavItem> _items = [
     _NavItem('Home', Icons.home_outlined, Icons.home_rounded),
@@ -53,7 +59,7 @@ class AppBottomNav extends StatelessWidget {
             _NavButton(
               item: _items[i],
               selected: i == currentIndex,
-              showDot: i == 4,
+              showDot: (i == 3 && messagesDot) || (i == 4 && alertsDot),
               onTap: () => onTap(i),
             ),
         ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/app_state.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/validators.dart';
@@ -7,7 +8,7 @@ import '../widgets/app_text_field.dart';
 import '../widgets/logo_lockup.dart';
 import '../widgets/primary_button.dart';
 import 'create_account_screen.dart';
-import 'home_placeholder_screen.dart';
+import 'main_shell.dart';
 
 /// Page 02 · Sign in (Figma node 6:75)
 class SignInScreen extends StatefulWidget {
@@ -18,20 +19,11 @@ class SignInScreen extends StatefulWidget {
 }
 
 class _SignInScreenState extends State<SignInScreen> {
-  static const String _demoPassword = 'demo1234';
-
-  // Demo accounts shown as chips (label, email).
-  static const List<(String, String)> _demoAccounts = [
-    ('Lea · client · ₱5,000', 'lea@demo.com'),
-    ('Maria · designer', 'maria@demo.com'),
-    ('Josh · developer', 'josh@demo.com'),
-    ('Admin', 'admin@demo.com'),
-  ];
-
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _hidePassword = true;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -40,22 +32,39 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
-  void _fillDemo(String email) {
-    // Clear old validation errors first, then fill in the demo values.
-    _formKey.currentState?.reset();
-    setState(() {
-      _emailController.text = email;
-      _passwordController.text = _demoPassword;
-    });
-  }
-
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // TODO: check the account against the real user data (next steps).
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomePlaceholderScreen()),
-    );
+    setState(() => _loading = true);
+    try {
+      await AppState.instance.signIn(
+        _emailController.text,
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainShell()),
+        (route) => false,
+      );
+    } on AppException catch (e) {
+      _comingSoon(e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final error = Validators.email(_emailController.text);
+    if (error != null) {
+      _comingSoon('Type your email above first, then tap Forgot password.');
+      return;
+    }
+    try {
+      await AppState.instance.sendPasswordReset(_emailController.text);
+      _comingSoon('Password reset link sent. Check your email.');
+    } on AppException catch (e) {
+      _comingSoon(e.message);
+    }
   }
 
   void _comingSoon(String message) {
@@ -121,8 +130,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(
-                    onTap: () =>
-                        _comingSoon('Password reset is not part of the demo.'),
+                    onTap: _forgotPassword,
                     child: Text(
                       'Forgot password?',
                       style: AppText.small12Medium.copyWith(
@@ -133,9 +141,9 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 24),
                 PrimaryButton(
-                  label: 'Sign in',
+                  label: _loading ? 'Signing in…' : 'Sign in',
                   icon: Icons.login_rounded,
-                  onPressed: _submit,
+                  onPressed: _loading ? null : _submit,
                 ),
                 const SizedBox(height: 18),
                 Center(
@@ -164,32 +172,6 @@ class _SignInScreenState extends State<SignInScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                Row(
-                  children: [
-                    const Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'Demo accounts · tap to fill',
-                        style: AppText.caption11,
-                      ),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.border)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final account in _demoAccounts)
-                      _DemoChip(
-                        label: account.$1,
-                        onTap: () => _fillDemo(account.$2),
-                      ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -199,32 +181,3 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 }
 
-class _DemoChip extends StatelessWidget {
-  const _DemoChip({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      shape: const StadiumBorder(
-        side: BorderSide(color: AppColors.border),
-      ),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-          child: Text(
-            label,
-            style: AppText.body14Medium.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

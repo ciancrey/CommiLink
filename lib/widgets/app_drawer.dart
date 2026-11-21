@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../models/service.dart';
+import '../screens/my_services_screen.dart';
 import '../screens/wallet_screen.dart';
 import '../screens/welcome_screen.dart';
 import '../theme/app_colors.dart';
@@ -18,11 +20,7 @@ class AppDrawer extends StatelessWidget {
   final String userName;
   final VoidCallback onOpenOrders;
 
-  String get _initials {
-    final parts = userName.trim().split(RegExp(r'\s+'));
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts[1][0]).toUpperCase();
-  }
+  String get _initials => initialsOf(userName);
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +58,10 @@ class AppDrawer extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(userName, style: AppText.heading20),
-                    Text('Small business owner', style: AppText.small12),
+                    Text(
+                      state.profile.value?.roleLabel ?? '',
+                      style: AppText.small12,
+                    ),
                   ],
                 ),
               ),
@@ -73,7 +74,9 @@ class AppDrawer extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               AnimatedBuilder(
-                animation: Listenable.merge([state.balance, state.orders]),
+                animation: Listenable.merge(
+                  [state.balance, state.orders, state.myServices],
+                ),
                 builder: (context, _) {
                   final count = state.activeCount;
                   return Column(
@@ -102,6 +105,21 @@ class AppDrawer extends StatelessWidget {
                           onOpenOrders();
                         },
                       ),
+                      if (state.profile.value?.isFreelancer == true)
+                        _DrawerItem(
+                          icon: Icons.storefront_outlined,
+                          title: 'My services',
+                          subtitle: '${state.myServices.value.length} posted',
+                          onTap: () {
+                            final nav = Navigator.of(context);
+                            nav.pop();
+                            nav.push(
+                              MaterialPageRoute(
+                                builder: (_) => const MyServicesScreen(),
+                              ),
+                            );
+                          },
+                        ),
                       _DrawerItem(
                         icon: Icons.person_outline_rounded,
                         title: 'Settings',
@@ -114,7 +132,7 @@ class AppDrawer extends StatelessWidget {
                             ..showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Settings is not part of the demo.',
+                                  'Settings is coming soon.',
                                 ),
                               ),
                             );
@@ -130,8 +148,10 @@ class AppDrawer extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    Navigator.of(context).pushAndRemoveUntil(
+                  onTap: () async {
+                    final nav = Navigator.of(context);
+                    await state.signOut();
+                    nav.pushAndRemoveUntil(
                       MaterialPageRoute(
                         builder: (_) => const WelcomeScreen(),
                       ),
@@ -163,7 +183,7 @@ class AppDrawer extends StatelessWidget {
               const SizedBox(height: 14),
               Center(
                 child: Text(
-                  'CommiLink v1.0 · MockPay demo mode',
+                  'CommiLink v1.0 · MockPay top-ups (no real money)',
                   style: AppText.caption11,
                 ),
               ),

@@ -1,6 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/social_state.dart';
 import '../models/service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -26,6 +28,21 @@ class _RequestCommissionScreenState extends State<RequestCommissionScreen> {
   final _briefController = TextEditingController();
   final _state = AppState.instance;
   bool _showError = false;
+  bool _busy = false;
+  final List<PlatformFile> _refFiles = [];
+
+  Future<void> _addRefFile() async {
+    if (_refFiles.length >= 5) {
+      _toast('You can attach up to 5 files.');
+      return;
+    }
+    try {
+      final f = await SocialState.instance.pickFile();
+      if (f != null) setState(() => _refFiles.add(f));
+    } on AppException catch (e) {
+      _toast(e.message);
+    }
+  }
 
   @override
   void dispose() {
@@ -39,35 +56,64 @@ class _RequestCommissionScreenState extends State<RequestCommissionScreen> {
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  void _topUp(int shortfall) {
-    // Round up to the next ₱1,000 for the demo.
+  Future<void> _topUp(int shortfall) async {
+    // Round up to the next ₱1,000 (MockPay minimum is ₱100).
     final amount = ((shortfall + 999) ~/ 1000) * 1000;
-    _state.topUp(amount);
-    _toast('MockPay top-up of ${formatPeso(amount)} successful (demo).');
+    setState(() => _busy = true);
+    try {
+      await _state.topUp(amount);
+      _toast('MockPay top-up of ${formatPeso(amount)} successful (demo).');
+    } on AppException catch (e) {
+      _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final brief = _briefController.text.trim();
     if (brief.length < _minChars) {
       setState(() => _showError = true);
       return;
     }
 
-    final order = _state.placeOrder(widget.service, brief);
-    if (order == null) return; // not enough balance
+    setState(() => _busy = true);
+    try {
+      // Database function place_order: checks balance, holds the money,
+      // creates the order and the wallet history line in one step.
+      final orderId = await _state.placeOrder(widget.service, brief);
 
-    final messenger = ScaffoldMessenger.of(context);
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            '${formatPeso(order.amount)} is now held by CommiLink. '
-                'Request sent to ${widget.service.freelancerName}.',
+      // Upload reference files to the new commission (private storage).
+      var failed = 0;
+      for (final f in _refFiles) {
+        try {
+          await SocialState.instance.uploadOrderFile(orderId, 'brief', f);
+        } on AppException catch (_) {
+          failed++;
+        }
+      }
+      if (!mounted) return;
+      if (failed > 0) {
+        _toast('$failed file(s) could not be uploaded. You can send them in the chat.');
+      }
+
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              '${formatPeso(widget.service.price)} is now held by CommiLink. '
+              'Request sent to ${widget.service.freelancerName}.',
+            ),
           ),
-        ),
-      );
+        );
+    } on AppException catch (e) {
+      _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -97,10 +143,24 @@ class _RequestCommissionScreenState extends State<RequestCommissionScreen> {
                         const SizedBox(height: 6),
                         _buildBrief(),
                         const SizedBox(height: 16),
-                        GestureDetector(
-                          onTap: () => _toast(
-                            'File upload is not part of the demo.',
+                        for (final f in _refFiles)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: InputChip(
+                              avatar: const Icon(Icons.attach_file_rounded,
+                                  size: 16, color: AppColors.wine700),
+                              label: Text(
+                                '${f.name} · ${fileSize(f.size)}',
+                                style: AppText.small12Medium,
+                              ),
+                              backgroundColor: AppColors.peach100,
+                              side: BorderSide.none,
+                              onDeleted: () =>
+                                  setState(() => _refFiles.remove(f)),
+                            ),
                           ),
+                        GestureDetector(
+                          onTap: _busy ? null : _addRefFile,
                           child: Row(
                             children: [
                               const Icon(
@@ -156,7 +216,7 @@ class _RequestCommissionScreenState extends State<RequestCommissionScreen> {
                           width: double.infinity,
                           height: 52,
                           child: OutlinedButton.icon(
-                            onPressed: () => _topUp(shortfall),
+                            onPressed: _busy ? null : () => _topUp(shortfall),
                             icon: const Icon(
                               Icons.add_card_rounded,
                               size: 20,
@@ -181,7 +241,7 @@ class _RequestCommissionScreenState extends State<RequestCommissionScreen> {
                       CtaButton(
                         label: 'Send request · ${formatPeso(service.price)}',
                         icon: Icons.send_rounded,
-                        onPressed: enough ? _submit : null,
+                        onPressed: enough && !_busy ? _submit : null,
                       ),
                     ],
                   ),

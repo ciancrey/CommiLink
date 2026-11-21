@@ -28,8 +28,14 @@ class WalletScreen extends StatelessWidget {
       builder: (_) => const _TopUpSheet(),
     );
     if (amount != null && context.mounted) {
-      AppState.instance.topUp(amount);
-      _toast(context, 'MockPay top-up of ${formatPeso(amount)} successful.');
+      try {
+        await AppState.instance.topUp(amount);
+        if (context.mounted) {
+          _toast(context, 'MockPay top-up of ${formatPeso(amount)} successful.');
+        }
+      } on AppException catch (e) {
+        if (context.mounted) _toast(context, e.message);
+      }
     }
   }
 
@@ -60,11 +66,17 @@ class WalletScreen extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(
-                              child: _StatCard(
-                                icon: Icons.north_east_rounded,
-                                label: 'Spent this month',
-                                value: formatPeso(state.spent),
-                              ),
+                              child: state.profile.value?.isFreelancer == true
+                                  ? _StatCard(
+                                      icon: Icons.south_west_rounded,
+                                      label: 'Earned this month',
+                                      value: formatPeso(state.earned),
+                                    )
+                                  : _StatCard(
+                                      icon: Icons.north_east_rounded,
+                                      label: 'Spent this month',
+                                      value: formatPeso(state.spent),
+                                    ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -235,7 +247,7 @@ class WalletScreen extends StatelessWidget {
                         filled: false,
                         onTap: () => _toast(
                           context,
-                          'Withdraw is not part of the demo.',
+                          'Withdrawals need a real payment provider (coming soon).',
                         ),
                       ),
                     ),

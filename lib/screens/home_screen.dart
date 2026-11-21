@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
-import '../data/sample_services.dart';
 import '../models/service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -32,8 +31,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _category = 'All';
   String _query = '';
 
-  // TODO: replace with the signed-in user's real name.
-  final String _userName = 'Lea Garcia';
+  final _state = AppState.instance;
+
+  /// The signed-in user's name from the database.
+  String get _userName => _state.userName;
 
   @override
   void dispose() {
@@ -48,15 +49,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'Good evening,';
   }
 
-  String get _initials {
-    final parts = _userName.trim().split(RegExp(r'\s+'));
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts[1][0]).toUpperCase();
-  }
+  String get _initials => initialsOf(_userName);
 
   List<Service> get _filtered {
     final q = _query.trim().toLowerCase();
-    return sampleServices.where((s) {
+    return _state.services.value.where((s) {
       final matchesCategory = _category == 'All' || s.category == _category;
       final matchesQuery = q.isEmpty ||
           s.title.toLowerCase().contains(q) ||
@@ -81,13 +78,33 @@ class _HomeScreenState extends State<HomeScreen> {
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
+  Future<void> _refresh() async {
+    try {
+      await _state.refresh();
+    } on AppException catch (e) {
+      _message(e.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Rebuilds when services or the profile are (re)loaded from Supabase.
+    return AnimatedBuilder(
+      animation: Listenable.merge([_state.services, _state.profile]),
+      builder: (context, _) => _buildPage(context),
+    );
+  }
+
+  Widget _buildPage(BuildContext context) {
     final services = _filtered;
 
     return SafeArea(
       bottom: false,
-      child: SingleChildScrollView(
+      child: RefreshIndicator(
+        color: AppColors.wine700,
+        onRefresh: _refresh,
+        child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -174,17 +192,24 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.wine500,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              _initials,
-              style: AppText.label14.copyWith(color: AppColors.textOnBrand),
+          // Tap the avatar to open the side drawer (MainShell's drawer).
+          Builder(
+            builder: (ctx) => GestureDetector(
+              onTap: () => Scaffold.of(ctx).openDrawer(),
+              child: Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.wine500,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _initials,
+                  style:
+                      AppText.label14.copyWith(color: AppColors.textOnBrand),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -397,10 +422,18 @@ class _HomeScreenState extends State<HomeScreen> {
             color: AppColors.textTertiary,
           ),
           const SizedBox(height: 12),
-          Text('No services found', style: AppText.title16),
+          Text(
+            _state.services.value.isEmpty
+                ? 'No services yet'
+                : 'No services found',
+            style: AppText.title16,
+          ),
           const SizedBox(height: 4),
           Text(
-            'Try a different keyword or category.',
+            _state.services.value.isEmpty
+                ? 'Freelancers haven\u2019t posted any services yet. '
+                    'Pull down to refresh.'
+                : 'Try a different keyword or category.',
             textAlign: TextAlign.center,
             style: AppText.small12,
           ),

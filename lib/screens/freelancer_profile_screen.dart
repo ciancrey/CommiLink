@@ -65,7 +65,7 @@ class FreelancerProfileScreen extends StatelessWidget {
                             GestureDetector(
                               onTap: () => _message(
                                 context,
-                                'Full portfolio is not part of the demo.',
+                                'Showing up to 3 portfolio images.',
                               ),
                               child: Text(
                                 'See all',
@@ -235,9 +235,14 @@ class FreelancerProfileScreen extends StatelessWidget {
 
     return Row(
       children: [
-        cell('${service.rating.toStringAsFixed(1)} ★', 'Rating'),
+        cell(
+          service.reviewCount == 0
+              ? 'New'
+              : '${service.rating.toStringAsFixed(1)} ★',
+          'Rating',
+        ),
         const SizedBox(width: 10),
-        cell('18', 'Completed'),
+        cell('${service.reviewCount}', 'Reviews'),
         const SizedBox(width: 10),
         cell('${service.deliveryDays} days', 'Avg. delivery'),
       ],
@@ -245,10 +250,13 @@ class FreelancerProfileScreen extends StatelessWidget {
   }
 
   Widget _buildPortfolio() {
-    Widget tile() {
+    final urls = service.imageUrls;
+
+    Widget tile(String? url) {
       return Expanded(
         child: Container(
           height: 104,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: const LinearGradient(
@@ -257,25 +265,38 @@ class FreelancerProfileScreen extends StatelessWidget {
               colors: [Color(0xFFFCEEE1), Color(0xFFF5E1E6)],
             ),
           ),
-          child: const Icon(
-            Icons.image_outlined,
-            size: 24,
-            color: AppColors.wine500,
-          ),
+          child: url == null
+              ? const Icon(
+                  Icons.image_outlined,
+                  size: 24,
+                  color: AppColors.wine500,
+                )
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image_outlined,
+                    color: AppColors.wine500,
+                  ),
+                ),
         ),
       );
     }
 
+    // Real portfolio images from "Post a service" (placeholders if none).
+    String? at(int i) => i < urls.length ? urls[i] : null;
+
     return Row(
       children: [
-        tile(),
+        tile(at(0)),
         const SizedBox(width: 10),
-        tile(),
+        tile(at(1)),
         const SizedBox(width: 10),
-        tile(),
+        tile(at(2)),
       ],
     );
   }
+
 
   Widget _buildServiceRow() {
     return Container(
